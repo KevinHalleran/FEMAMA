@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import learn
 
 class learn:
@@ -23,6 +26,7 @@ class learn:
         df.to_csv('MissionAssignments-Revised.csv')
 
     def LinearRegression():
+        print('get file')
         df=learn.getFileAsDataFrame('MissionAssignments.csv')
         df.head()
         print(df.head(10))
@@ -81,6 +85,100 @@ class learn:
         plt.yticks(())
 
         plt.show()
+    def ARIMA():
+        #https://machinelearningmastery.com/arima-for-time-series-forecasting-with-python/
+        print('get file')
+        df=learn.getFileAsDataFrame('MissionAssignments.csv') 
+        
+        #convert to dates then to floats from the date
+        df['dateRequested']=pd.to_datetime(df['dateRequested'])        
+        df['requestedAmount']=pd.to_numeric(df['requestedAmount'])
 
-learn.LinearRegression()
+        df=df.dropna()
+        #print(df['dateRequested'])
+
+        #Convert to ordinal
+        df['dateRequested']=df['dateRequested'].apply(lambda x: x.toordinal())
+
+        #create an array
+        data = pd.Series(df['dateRequested']).to_numpy()
+
+        # Fit the ARIMA model
+        #https://stackoverflow.com/questions/31690134/python-statsmodels-help-using-arima-model-for-time-series
+        #https://365datascience.com/tutorials/python-tutorials/arima/
+        #https://www.capitalone.com/tech/machine-learning/arima-model-time-series-forecasting/
+        #https://www.machinelearningplus.com/time-series/time-series-analysis-python/
+        #https://www.machinelearningplus.com/time-series/arima-model-time-series-forecasting-python/
+        model = ARIMA(data, order=(1, 1, 1))
+        model_fit = model.fit()
+
+        # Predict
+        predictions = model_fit.forecast(steps=3)[0]
+        print(model_fit.summary())
+        #print(predictions)
+
+    def FindD():
+        df=learn.getFileAsDataFrame('MissionAssignments.csv') 
+        #df_learn=df[['dateRequested','requestedAmount']]
+        df_learn=df[['dateRequested']]
+        df_learn['dateRequested']=pd.to_datetime(df_learn['dateRequested'])        
+        #df_learn['requestedAmount']=pd.to_numeric(df_learn['requestedAmount'])
+        df_learn=df_learn.dropna()
+
+        df_learn['dateRequested']=df_learn['dateRequested'].apply(lambda x: x.toordinal())
+
+        result = adfuller(df_learn.dropna())
+        print('ADF Statistic: %f' % result[0])
+        print('p-value: %f' % result[1])
+    def autoCorrelate():
+        plt.rcParams.update({'figure.figsize':(9,7), 'figure.dpi':120})
+
+        # Import data
+        df=learn.getFileAsDataFrame('MissionAssignments.csv') 
+        df_learn=df[['dateRequested']]
+        df_learn['dateRequested']=pd.to_datetime(df_learn['dateRequested'])        
+        #df_learn['requestedAmount']=pd.to_numeric(df_learn['requestedAmount'])
+        df_learn=df_learn.dropna()
+
+        df_learn['dateRequested']=df_learn['dateRequested'].apply(lambda x: x.toordinal())
+
+        # Original Series
+        fig, axes = plt.subplots(3, 2, sharex=True)
+        axes[0, 0].plot(df_learn); axes[0, 0].set_title('Original Series')
+        plot_acf(df_learn, ax=axes[0, 1])
+
+        # 1st Differencing
+        axes[1, 0].plot(df_learn.diff()); axes[1, 0].set_title('1st Order Differencing')
+        plot_acf(df_learn.diff().dropna(), ax=axes[1, 1])
+
+        # 2nd Differencing
+        axes[2, 0].plot(df_learn.diff().diff()); axes[2, 0].set_title('2nd Order Differencing')
+        plot_acf(df_learn.diff().diff().dropna(), ax=axes[2, 1])
+
+        plt.show()
+    def visualizeSeries():
+        df=learn.getFileAsDataFrame('MissionAssignments.csv') 
+        df_learn=df[['dateRequested','requestedAmount']]
+
+        df_learn['dateRequested']=pd.to_datetime(df_learn['dateRequested'])        
+        df_learn['requestedAmount']=pd.to_numeric(df_learn['requestedAmount'])
+        df_learn=df_learn.dropna()
+
+        #https://www.geeksforgeeks.org/how-to-plot-a-pandas-dataframe-with-matplotlib/
+        # Draw Plot
+        def plot_df(df_learn, x, y, title="", xlabel='Date', ylabel='Value', dpi=100):
+            plt.figure(figsize=(16,5), dpi=dpi)
+            plt.plot(x, y, color='tab:red')
+            plt.gca().set(title=title, xlabel=xlabel, ylabel=ylabel)
+            plt.show()
+
+        plot_df(df_learn, x=df_learn['dateRequested'], y=df_learn['requestedAmount'],title='')    
+
+    
+
+#learn.LinearRegression()
+learn.ARIMA()
+#learn.FindD()
+#learn.autoCorrelate()
+#learn.visualizeSeries()
 print('complete')
