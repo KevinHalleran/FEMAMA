@@ -1,0 +1,1 @@
+reshape into X=t and Y=t+1reshape input to be [samples, time steps, features]create and fit the LSTM networkmake predictionsinvert predictions

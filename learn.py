@@ -7,6 +7,13 @@ from sklearn.metrics import mean_squared_error, r2_score
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+import tensorflow as tf
+from tensorflow import keras
+#from tensorflow.python.keras.models import Sequential
+#from tensorflow.python.keras.layers import Dense
+#from tensorflow.python.keras.layers import LSTMV1
 import learn
 
 #https://www.webscale.com/engineering-education/multivariate-time-series-using-auto-arima/
@@ -216,13 +223,101 @@ class learn:
         learn.ARIMA(df)    
         #learn.autoCorrelate(df)
         #learn.visualizeSeries(df)
+    # convert an array of values into a dataset matrix
+    def create_dataset(dataset, look_back=1):
+        dataX, dataY = [], []
+        for i in range(len(dataset)-look_back-1):
+            aVal = dataset[i:(i+look_back), 0]
+            dataX.append(aVal)
+            dataY.append(dataset[i + look_back, 0])
+        return np.array(dataX), np.array(dataY)
+    def LSTMRecursion(df, trainId, testId):        
+        file=open('log.txt','w')
+        #https://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-networks-python-keras/
+        tf.random.set_seed(7)
+        df=df[['dateRequested','requestedAmount','disasterNumber']]
+        df['dateRequested']=pd.to_datetime(df['dateRequested'])        
+        df['requestedAmount']=pd.to_numeric(df['requestedAmount'])
+        df=df.dropna()
+        df['dateRequested']=df['dateRequested'].apply(lambda x: x.toordinal())
+        df=df.dropna()
+
+        df_train=df[df['disasterNumber']==trainId]
+        df_test=df[df['disasterNumber']==testId]
+
+        df_train=df_train[['dateRequested','requestedAmount']]
+        df_test=df_test[['dateRequested','requestedAmount']]
 
 
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        df_train=scaler.fit_transform(df_train)
+        df_test=scaler.fit_transform(df_test)
+
+        print('reshape into X=t and Y=t+1')
+        file.write('reshape into X=t and Y=t+1')
+        look_back = 1
+        trainX, trainY = learn.create_dataset(df_train, look_back)
+        testX, testY = learn.create_dataset(df_test, look_back)
+
+        print('reshape input to be [samples, time steps, features]')
+        file.write('reshape input to be [samples, time steps, features]')
+        trainX = np.reshape(trainX, (trainX.shape[0], 1, trainX.shape[1]))
+        testX = np.reshape(testX, (testX.shape[0], 1, testX.shape[1]))
+
+        print('create and fit the LSTM network')
+        file.write('create and fit the LSTM network')
+        model = keras.Sequential()
+        model.add(keras.layers.LSTM(4, input_shape=(1, look_back)))
+        model.add(keras.layers.Dense(1))
+        model.compile(loss='mean_squared_error', optimizer='adam')
+        model.fit(trainX, trainY, epochs=100, batch_size=1, verbose=2)
+
+        print('make predictions')
+        file.write('make predictions')
+        trainPredict = model.predict(trainX)
+        testPredict = model.predict(testX)
+        
+        print('invert predictions')
+        file.write('invert predictions')
+        trainPredict = scaler.inverse_transform(trainPredict)
+        trainY = scaler.inverse_transform([trainY])
+        testPredict = scaler.inverse_transform(testPredict)
+        testY = scaler.inverse_transform([testY])
+        
+        print('calculate root mean squared error')
+        file.write('calculate root mean squared error')
+        trainScore = np.sqrt(mean_squared_error(trainY[0], trainPredict[:,0]))
+        print('Train Score: %.2f RMSE' % (trainScore))
+        file.write('Train Score: %.2f RMSE' % (trainScore))
+        testScore = np.sqrt(mean_squared_error(testY[0], testPredict[:,0]))
+        print('Test Score: %.2f RMSE' % (testScore))
+        file.write('Test Score: %.2f RMSE' % (testScore))
+
+        print('shift train predictions for plotting')
+        file.write('shift train predictions for plotting')
+        trainPredictPlot = np.empty_like(df)
+        trainPredictPlot[:, :] = np.nan
+        trainPredictPlot[look_back:len(trainPredict)+look_back, :] = trainPredict
+        
+        print('shift test predictions for plotting')
+        file.write('shift test predictions for plotting')
+        testPredictPlot = np.empty_like(df)
+        testPredictPlot[:, :] = np.nan
+        testPredictPlot[len(trainPredict)+(look_back*2)+1:len(df)-1, :] = testPredict
+
+        print('plot baseline and predictions')
+        file.write('plot baseline and predictions')
+        plt.plot(scaler.inverse_transform(df))
+        plt.plot(trainPredictPlot)
+        plt.plot(testPredictPlot)
+        plt.show()
 
 print('get file')
 df=learn.getFileAsDataFrame('MissionAssignments.csv') 
-eventId=4339
-learn.byEvent(df, eventId)
+eventId=4339 #Maria
+testId=4332 #Harvey
+#learn.byEvent(df, eventId)
+learn.LSTMRecursion(df,eventId,testId)
 #learn.plotDF()
 #learn.LinearRegression()
 #learn.ARIMA()
